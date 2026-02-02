@@ -16,7 +16,7 @@ class RunIDFilter(logging.Filter):
 
 
 
-def setup_logging(log_file: str = None, run_id: str = None):
+def setup_logging(log_file: str = LOG_FILE, run_id: str = None):
     handlers = [logging.StreamHandler()]
     
     if log_file:

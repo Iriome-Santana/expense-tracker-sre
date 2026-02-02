@@ -1,5 +1,6 @@
 from storage import load_expenses, save_expenses
 from functools import wraps
+from errors import *
 
 
 def validate_expense(func):
@@ -9,9 +10,9 @@ def validate_expense(func):
         description = args[1]
         amount = args[2]
         if not date or not description or not amount:
-            raise ValueError("All fields are required")
+            raise FieldsRequiredError("All fields are required")
         if amount <= 0:
-            raise ValueError("Amount must be greater than 0")
+            raise NegativeAmountError("Amount must be greater than 0")
         return func(self, *args, **kwargs)
     return wrapper_inner
 

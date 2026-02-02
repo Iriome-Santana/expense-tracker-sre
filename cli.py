@@ -1,8 +1,9 @@
 import logging
 from expenses import ExpenseManager
 from backup import backup_expenses
-from logging_logic import setup_logging
+from logging_logic import *
 import uuid
+from errors import *
 
 RUN_ID = str(uuid.uuid4())[:8]
 
@@ -23,21 +24,25 @@ def main():
         option = menu()
         try:
             if option == "1":
+                date = input("Enter date (YYYY-MM-DD): ")
+                description = input("Enter description: ")
                 try:
-                    date = input("Enter date (YYYY-MM-DD): ")
-                    description = input("Enter description: ")
-                    try:
-                        amount = float(input("Enter amount: "))
-                    except ValueError:
-                        print("Invalid amount")
-                        logging.warning("User enter a invalid amount")
-                        continue
+                    amount = float(input("Enter amount: "))
                 except ValueError:
+                    print("Amount must be a number")
+                    logging.warning("User enter a invalid amount")
+                    continue
+                         
+                try:
+                    manager.add_expense(date, description, amount)
+                except NegativeAmountError:
+                    print("Invalid amount")
+                    logging.warning("User enter a invalid amount")
+                    continue
+                except FieldsRequiredError:
                     print("Fields are required")
                     logging.warning("User enter a invalid field")
                     continue
-
-                manager.add_expense(date, description, amount)
                 print("Expense added successfully!")
                 logging.info("Expense added successfully!")
 
@@ -66,9 +71,13 @@ def main():
                     print("Invalid index")
                     logging.warning("User enter a invalid index")
                     continue
-                manager.delete_expense(index)
-                logging.info("User delete expense")
-                print("Expense deleted successfully!")
+                try:
+                    manager.delete_expense(index)
+                    logging.info("User delete expense")
+                    print("Expense deleted successfully!")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    logging.error(f"Error deleting expense: {e}")
 
             elif option == "4":
                 logging.info("User show summary")
@@ -87,5 +96,5 @@ def main():
             print(e)
         
 if __name__ == "__main__":
-    setup_logging("app.log", RUN_ID)
+    setup_logging(LOG_FILE, RUN_ID)
     main()
