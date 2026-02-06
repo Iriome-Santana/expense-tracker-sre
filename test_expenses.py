@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import patch
 from expenses import ExpenseManager
+from errors import NegativeAmountError, FieldsRequiredError
 
 """fixture"""
-
 @pytest.fixture
 def manager_mock():
     with patch("expenses.load_expenses", return_value=[]), \
@@ -23,15 +23,15 @@ def test_add_expense_fixture(manager_mock):
     assert manager_mock.expenses[-1]["amount"] == 3.5
     
 def test_add_expense_amount_negative(manager_mock):
-    with pytest.raises(ValueError):
+    with pytest.raises(NegativeAmountError):
         manager_mock.add_expense("2026-01-27", "Coffee", -3.5)
         
 def test_add_expense_amount_zero(manager_mock):
-    with pytest.raises(ValueError):
+    with pytest.raises(FieldsRequiredError):
         manager_mock.add_expense("2026-01-27", "Coffee", 0)
         
 def test_add_expense_empty_fields(manager_mock):
-    with pytest.raises(ValueError):
+    with pytest.raises(FieldsRequiredError):
         manager_mock.add_expense("", "", 0)
 
 """show expenses tests"""
