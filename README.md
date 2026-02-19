@@ -26,14 +26,23 @@ This isn't just another expense tracker — it's a demonstration of **Site Relia
 - 🧪 **Test Coverage**: Unit tests with fixtures and mocks
 - ⚙️ **12-Factor Config**: Environment variable configuration
 - 🌐 **REST API**: FastAPI endpoints for all core operations
+- 🐳 **Dockerized**: Full containerization with Docker Compose
+- 🔁 **CI Pipeline**: Automated testing with GitHub Actions
 
 ## Prerequisites
 
+### Running locally
 - Python 3.8+
 - PostgreSQL
 - pip
 
+### Running with Docker
+- Docker
+- Docker Compose
+
 ## Installation
+
+### Option 1 — Local
 
 ```bash
 # Clone the repository
@@ -45,10 +54,20 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install psycopg2-binary fastapi uvicorn pytest
+pip install -r requirements.txt
 ```
 
-## Database Setup
+### Option 2 — Docker (recommended)
+
+```bash
+git clone https://github.com/Iriome-Santana/expense-tracker-sre.git
+cd expense-tracker-sre
+docker-compose up
+```
+
+That's it. The API and database are ready at `http://localhost:8002`.
+
+## Database Setup (local only)
 
 ```bash
 # Start PostgreSQL
@@ -79,27 +98,20 @@ ALTER TABLE expenses OWNER TO expense_user;
 
 ### CLI
 ```bash
-# Start the application
-python cli.py
-
-# Run with custom configuration
-export DB_HOST="localhost"
-export DB_NAME="expense_tracker"
-export DB_USER="expense_user"
-export DB_PASSWORD="expense_pass"
-export LOG_FILE="custom.log"
-export LOG_RETENTION_DAYS=30
 python cli.py
 ```
 
 ### API
 ```bash
-# Start the API server
+# Local
 uvicorn main:app --reload
 
-# API available at http://localhost:8000
-# Interactive docs at http://localhost:8000/docs
+# Docker
+docker-compose up
 ```
+
+API available at `http://localhost:8000` (local) or `http://localhost:8002` (Docker).
+Interactive docs at `/docs`.
 
 ## API Endpoints
 
@@ -125,16 +137,23 @@ POST /expenses
 
 ```
 expense-tracker-sre/
-├── main.py             # FastAPI application and endpoints
-├── cli.py              # Command-line interface
-├── expenses.py         # Business logic and validation
-├── storage.py          # PostgreSQL persistence layer
-├── logging_logic.py    # Logging configuration and run IDs
-├── backup.py           # Backup automation (exports DB to CSV)
-├── errors.py           # Custom exceptions
-├── test_expenses.py    # Test suite
-├── app.log             # Log file (generated)
-└── backups/            # Backup directory (generated)
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # GitHub Actions CI pipeline
+├── main.py                 # FastAPI application and endpoints
+├── cli.py                  # Command-line interface
+├── expenses.py             # Business logic and validation
+├── storage.py              # PostgreSQL persistence layer
+├── logging_logic.py        # Logging configuration and run IDs
+├── backup.py               # Backup automation (exports DB to CSV)
+├── errors.py               # Custom exceptions
+├── test_expenses.py        # Test suite
+├── Dockerfile              # Container definition for the API
+├── docker-compose.yml      # Multi-container orchestration
+├── init.sql                # Database initialization script
+├── requirements.txt        # Python dependencies
+├── app.log                 # Log file (generated)
+└── backups/                # Backup directory (generated)
 ```
 
 ## Architecture
@@ -163,6 +182,26 @@ Crosscutting Concerns:
 └── Backup (CSV export on startup)
 ```
 
+## Architecture Decisions
+
+### Why PostgreSQL instead of CSV?
+The original version used a CSV file for persistence. This worked for a prototype but had real limitations: no concurrent access, full file rewrite on every change, no data types, no queries. PostgreSQL solves all of this. It also reflects how production systems actually work — and makes the app ready for containerization, since the database lives in its own service.
+
+### Why separate storage.py from expenses.py?
+The storage layer is completely isolated from the business logic. `expenses.py` doesn't know if data comes from PostgreSQL, a CSV, or an in-memory list — it just calls `load_expenses()`, `add_expense()`, and `delete_expense()`. This separation made it possible to migrate from CSV to PostgreSQL without touching the business logic or the tests, which is a core principle of clean architecture.
+
+### Why Docker Compose instead of a single container?
+The app has two independent components — the API and the database. Running them in separate containers follows the single responsibility principle and reflects how real microservice environments work. Docker Compose handles the networking between them automatically and allows each service to be scaled or replaced independently.
+
+### Why init.sql instead of migrations?
+For a project at this stage, a simple `init.sql` is enough — it runs automatically when the PostgreSQL container starts for the first time. A migration tool like Alembic would be the next step as the schema evolves.
+
+### Why mock the database in tests instead of using a real one?
+Tests should be fast, isolated, and not depend on external infrastructure. By using an in-memory `fake_db` in the test fixture, the tests run in milliseconds and work anywhere — including in the CI pipeline on GitHub Actions — without needing a real PostgreSQL instance.
+
+### Why validate dates in Python before hitting the database?
+PostgreSQL would catch invalid dates too, but the error it returns is a low-level database exception that's hard to handle cleanly. Validating in the `validate_expense` decorator means the error is caught early, translated into a meaningful message, and never reaches the database. This is the "fail fast" principle.
+
 ## Testing
 
 ```bash
@@ -170,7 +209,6 @@ Crosscutting Concerns:
 pytest test_expenses.py -v
 
 # Run with coverage report
-pip install pytest-cov
 pytest test_expenses.py --cov=expenses --cov-report=term-missing
 ```
 
@@ -181,6 +219,15 @@ pytest test_expenses.py --cov=expenses --cov-report=term-missing
 - ✅ Expense deletion
 - ✅ Empty state handling
 - ✅ Summary calculations
+
+## CI Pipeline
+
+Every push and pull request to `main` triggers the CI pipeline automatically via GitHub Actions:
+
+1. Checkout code
+2. Set up Python 3.12
+3. Install dependencies
+4. Run tests with coverage
 
 ## Environment Variables
 
@@ -210,16 +257,20 @@ pytest test_expenses.py --cov=expenses --cov-report=term-missing
 - **No hardcoded values** — externalized configuration
 - **Clear error messages** for troubleshooting
 - **REST API** for programmatic access
+- **One-command deployment** with Docker Compose
 
 ### 4. Testability
 - **Unit tests** with mocks to isolate components
 - **Fixtures** for test setup/teardown
 - **In-memory fake DB** in tests — no real database needed
+- **Automated CI** runs tests on every push
 
 ## Roadmap
 
-- [ ] Dockerization with Docker Compose
-- [ ] CI/CD pipeline with GitHub Actions
+- [x] PostgreSQL persistence
+- [x] REST API with FastAPI
+- [x] Dockerization with Docker Compose
+- [x] CI pipeline with GitHub Actions
 - [ ] Cloud deployment
 - [ ] Prometheus metrics endpoint
 - [ ] JSON structured logging
