@@ -1,0 +1,25 @@
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: expense_user
+      POSTGRES_PASSWORD: expense_pass
+      POSTGRES_DB: expense_tracker
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+  api:
+    build: .
+    ports:
+      - "8002:8000"
+    environment:
+      DB_HOST: db
+      DB_NAME: expense_tracker
+      DB_USER: expense_user
+      DB_PASSWORD: expense_pass
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
