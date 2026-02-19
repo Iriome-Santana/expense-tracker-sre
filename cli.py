@@ -32,7 +32,6 @@ def main():
                     print("Amount must be a number")
                     logging.warning("User enter a invalid amount")
                     continue
-                         
                 try:
                     manager.add_expense(date, description, amount)
                 except NegativeAmountError:
@@ -42,6 +41,10 @@ def main():
                 except FieldsRequiredError:
                     print("Fields are required")
                     logging.warning("User enter a invalid field")
+                    continue
+                except ValueError as e:
+                    print(e)
+                    logging.warning(f"User enter a invalid date: {e}")
                     continue
                 print("Expense added successfully!")
                 logging.info("Expense added successfully!")
@@ -67,12 +70,13 @@ def main():
                     print(f"{i}. {expense['date']} - {expense['description']} - {expense['amount']}")
                 try:
                     index = int(input("Enter expense index: ")) - 1
+                    expense_id= expenses[index]["id"]
                 except ValueError:
                     print("Invalid index")
                     logging.warning("User enter a invalid index")
                     continue
                 try:
-                    manager.delete_expense(index)
+                    manager.delete_expense(expense_id)
                     logging.info("User delete expense")
                     print("Expense deleted successfully!")
                 except ValueError as e:

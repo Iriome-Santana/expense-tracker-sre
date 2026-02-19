@@ -6,21 +6,32 @@ from errors import NegativeAmountError, FieldsRequiredError
 """fixture"""
 @pytest.fixture
 def manager_mock():
-    with patch("expenses.load_expenses", return_value=[]), \
-         patch("expenses.save_expenses") as mock_save:
+    fake_db = []
+    
+    def fake_add(date, description, amount):
+        fake_db.append({"date": date, "description": description, "amount": amount})
+
+    def fake_delete(expense_id):
+        if expense_id >= len(fake_db) or not fake_db:
+            raise ValueError("Expense not found")
+        fake_db.pop(expense_id)
+    
+    with patch("expenses.load_expenses", side_effect=lambda: fake_db), \
+         patch("expenses.add_expense", side_effect=fake_add), \
+         patch("expenses.delete_expense", side_effect=fake_delete):
         manager = ExpenseManager()
         yield manager
 
 
 """add expense tests"""
 def test_add_expense_fixture(manager_mock):
-    initial_count = len(manager_mock.expenses)
+    initial_count = len(manager_mock.show_expenses())
     
     manager_mock.add_expense("2026-01-27", "Coffee", 3.5)
     
-    assert len(manager_mock.expenses) == initial_count + 1
-    assert manager_mock.expenses[-1]["description"] == "Coffee"
-    assert manager_mock.expenses[-1]["amount"] == 3.5
+    assert len(manager_mock.show_expenses()) == initial_count + 1
+    assert manager_mock.show_expenses()[-1]["description"] == "Coffee"
+    assert manager_mock.show_expenses()[-1]["amount"] == 3.5
     
 def test_add_expense_amount_negative(manager_mock):
     with pytest.raises(NegativeAmountError):
@@ -46,7 +57,7 @@ def test_show_expenses_empty(manager_mock):
 def test_delete_expense_fixture(manager_mock):
     manager_mock.add_expense("2026-01-27", "Coffee", 3.5)
     manager_mock.delete_expense(0)
-    assert len(manager_mock.expenses) == 0
+    assert len(manager_mock.show_expenses()) == 0
 
 def test_delete_expense_invalid_index(manager_mock):
     with pytest.raises(ValueError):

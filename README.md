@@ -1,10 +1,10 @@
 # SRE Expense Tracker
 
-Production-ready expense tracking CLI with SRE/DevOps best practices. Built to demonstrate observability, reliability, and operational excellence principles.
+Production-ready expense tracking app with SRE/DevOps best practices. Built to demonstrate observability, reliability, and operational excellence principles.
 
 ## Project Overview
 
-This isn't just another expense tracker—it's a demonstration of **Site Reliability Engineering** principles applied to a simple application:
+This isn't just another expense tracker — it's a demonstration of **Site Reliability Engineering** principles applied to a real application:
 
 - **Observability First**: Structured logging with correlation IDs
 - **Reliability**: Automated backups and data validation
@@ -16,83 +16,155 @@ This isn't just another expense tracker—it's a demonstration of **Site Reliabi
 ### Core Functionality
 - ✅ Add, view, and delete expenses
 - ✅ Calculate expense summaries
-- ✅ CSV-based persistent storage
+- ✅ PostgreSQL-based persistent storage
 
 ### SRE Features
 - 📊 **Structured Logging**: Every operation logged with unique run IDs
-- 🔄 **Automated Backups**: Timestamped backups on startup
+- 🔄 **Automated Backups**: Timestamped CSV exports from the database on startup
 - ⏰ **Log Retention**: Automatic cleanup of old logs (configurable)
 - 🛡️ **Input Validation**: Decorator-based validation patterns
 - 🧪 **Test Coverage**: Unit tests with fixtures and mocks
 - ⚙️ **12-Factor Config**: Environment variable configuration
+- 🌐 **REST API**: FastAPI endpoints for all core operations
 
 ## Prerequisites
 
 - Python 3.8+
+- PostgreSQL
 - pip
 
 ## Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/Iriome-Santana/expense-tracker-sre.git
 cd expense-tracker-sre
 
-# Install dependencies
-pip install pytest
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-# Run the application
-python cli.py
+# Install dependencies
+pip install psycopg2-binary fastapi uvicorn pytest
+```
+
+## Database Setup
+
+```bash
+# Start PostgreSQL
+sudo service postgresql start
+
+# Create user and database
+sudo -u postgres psql
+
+CREATE USER expense_user WITH PASSWORD 'expense_pass';
+CREATE DATABASE expense_tracker OWNER expense_user;
+GRANT ALL PRIVILEGES ON DATABASE expense_tracker TO expense_user;
+\q
+
+# Create the expenses table
+sudo -u postgres psql -d expense_tracker
+
+CREATE TABLE expenses (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    description TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL
+);
+ALTER TABLE expenses OWNER TO expense_user;
+\q
 ```
 
 ## Usage
+
+### CLI
 ```bash
 # Start the application
 python cli.py
 
-# Run tests
-pytest test_expenses.py -v
-
 # Run with custom configuration
+export DB_HOST="localhost"
+export DB_NAME="expense_tracker"
+export DB_USER="expense_user"
+export DB_PASSWORD="expense_pass"
 export LOG_FILE="custom.log"
-export EXPENSES_FILE="my_expenses.csv"
 export LOG_RETENTION_DAYS=30
 python cli.py
 ```
 
-## Project Structure
+### API
+```bash
+# Start the API server
+uvicorn main:app --reload
+
+# API available at http://localhost:8000
+# Interactive docs at http://localhost:8000/docs
 ```
-sre-expense-tracker/
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Health check |
+| GET | `/expenses` | List all expenses |
+| POST | `/expenses` | Add a new expense |
+| DELETE | `/expenses/{id}` | Delete an expense by ID |
+| GET | `/expenses/summary` | Get total amount |
+
+### Example request
+```json
+POST /expenses
+{
+  "date": "2026-02-19",
+  "description": "Coffee",
+  "amount": 3.50
+}
+```
+
+## Project Structure
+
+```
+expense-tracker-sre/
+├── main.py             # FastAPI application and endpoints
 ├── cli.py              # Command-line interface
 ├── expenses.py         # Business logic and validation
-├── storage.py          # Data persistence layer
+├── storage.py          # PostgreSQL persistence layer
 ├── logging_logic.py    # Logging configuration and run IDs
-├── backup.py           # Backup automation
+├── backup.py           # Backup automation (exports DB to CSV)
+├── errors.py           # Custom exceptions
 ├── test_expenses.py    # Test suite
-├── expenses.csv        # Data file (generated)
-├── app.log            # Log file (generated)
-└── backups/           # Backup directory (generated)
+├── app.log             # Log file (generated)
+└── backups/            # Backup directory (generated)
 ```
 
 ## Architecture
+
 ```
-┌─────────────┐
-│   CLI       │  ← User interaction
-└──────┬──────┘
-       │
-┌──────▼──────────┐
-│ ExpenseManager  │  ← Business logic + validation decorators
-└──────┬──────────┘
-       │
-┌──────▼──────────┐
-│   Storage       │  ← CSV persistence
-└─────────────────┘
+┌─────────────┐    ┌─────────────┐
+│   CLI       │    │  FastAPI    │  ← Interfaces
+└──────┬──────┘    └──────┬──────┘
+       │                  │
+       └────────┬──────────┘
+                │
+┌───────────────▼─────────────────┐
+│         ExpenseManager          │  ← Business logic + validation
+└───────────────┬─────────────────┘
+                │
+┌───────────────▼─────────────────┐
+│           storage.py            │  ← PostgreSQL persistence
+└───────────────┬─────────────────┘
+                │
+┌───────────────▼─────────────────┐
+│          PostgreSQL             │  ← Database
+└─────────────────────────────────┘
 
 Crosscutting Concerns:
 ├── Logging (run IDs, retention)
-└── Backup (automated on startup)
+└── Backup (CSV export on startup)
 ```
 
 ## Testing
+
 ```bash
 # Run all tests
 pytest test_expenses.py -v
@@ -103,19 +175,22 @@ pytest test_expenses.py --cov=expenses --cov-report=term-missing
 ```
 
 ### Test Coverage
-
 - ✅ Expense addition with validation
-- ✅ Expense deletion with index validation
+- ✅ Negative and zero amount handling
+- ✅ Empty fields handling
+- ✅ Expense deletion
 - ✅ Empty state handling
-- ✅ Invalid input scenarios
 - ✅ Summary calculations
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_NAME` | `expense_tracker` | Database name |
+| `DB_USER` | `expense_user` | Database user |
+| `DB_PASSWORD` | `expense_pass` | Database password |
 | `LOG_FILE` | `app.log` | Path to log file |
-| `EXPENSES_FILE` | `expenses.csv` | Path to expenses data file |
 | `LOG_RETENTION_DAYS` | `7` | Days to retain log files |
 
 ## SRE Principles Demonstrated
@@ -126,72 +201,33 @@ pytest test_expenses.py --cov=expenses --cov-report=term-missing
 - **Contextual information** in every log entry
 
 ### 2. Reliability
-- **Automated backups** prevent data loss
-- **Input validation** prevents corrupt data
+- **Automated backups** on startup — exports DB to timestamped CSV
+- **Input validation** prevents corrupt data (date format, negative amounts)
 - **Error handling** with graceful degradation
 
 ### 3. Operability
 - **Environment-based config** for different environments
-- **No hardcoded values** - externalized configuration
+- **No hardcoded values** — externalized configuration
 - **Clear error messages** for troubleshooting
+- **REST API** for programmatic access
 
 ### 4. Testability
 - **Unit tests** with mocks to isolate components
 - **Fixtures** for test setup/teardown
-- **Parametrized tests** for edge cases
+- **In-memory fake DB** in tests — no real database needed
 
-## Technical Highlights
+## Roadmap
 
-### Decorator Pattern for Validation
-```python
-@validate_expense
-def add_expense(self, date: str, description: str, amount: float):
-    # Validation happens automatically via decorator
-```
-
-### Run ID Correlation
-```python
-# Every log entry includes a unique run ID
-2026-01-30 10:15:23 - INFO - Expense added - a1b2c3d4
-2026-01-30 10:15:28 - INFO - User show expenses - a1b2c3d4
-```
-
-### Automated Backup Strategy
-```python
-# Backup created on startup with timestamp
-backups/expenses_20260130_101523.csv
-```
-
-## Learning Outcomes
-
-This project demonstrates understanding of:
-
-- **Python best practices**: Decorators, context managers, type hints
-- **Testing patterns**: Fixtures, mocks, parametrization
-- **SRE principles**: Logging, backups, config management
-- **Clean architecture**: Separation of concerns, single responsibility
-- **DevOps mindset**: Automation, observability, reliability
-
-## Future Enhancements
-
-- [ ] Dockerization with multi-stage builds
-- [ ] Prometheus metrics endpoint
+- [ ] Dockerization with Docker Compose
 - [ ] CI/CD pipeline with GitHub Actions
+- [ ] Cloud deployment
+- [ ] Prometheus metrics endpoint
 - [ ] JSON structured logging
-- [ ] Health check endpoint
-- [ ] Database migration (SQLite/PostgreSQL)
-- [ ] API REST with FastAPI
 - [ ] Grafana dashboards
-
-## License
-
-MIT License - Feel free to use this project for learning!
 
 ## Author
 
 Built by Iriome Santana as part of the journey to becoming an SRE/DevOps Engineer.
-
-**Learning Timeline**: 2.5 weeks in the field, 1 week on this project.
 
 ---
 

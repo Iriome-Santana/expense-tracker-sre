@@ -1,31 +1,61 @@
 import os
-import csv
+import logging
+import psycopg2
 
 
-EXPENSES_FILE = os.getenv("EXPENSES_FILE", "expenses.csv")
-FIELDNAMES = ["date", "description", "amount"]
+logging.basicConfig(level=logging.INFO)
+
+def get_connection():
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        database=os.getenv("DB_NAME", "expense_tracker"),
+        user=os.getenv("DB_USER", "expense_user"),
+        password=os.getenv("DB_PASSWORD", "expense_pass")
+    )
+    return conn
 
 def load_expenses():
-    if not os.path.exists(EXPENSES_FILE):
-        return []
-
     try:
-        with open(EXPENSES_FILE, "r", newline="", encoding="utf-8") as file:
-            reader = csv.DictReader(file)
-            expenses = list(reader)
-    except OSError as e:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, date, description, amount FROM expenses")
+        rows = cursor.fetchall()
+        expenses = [{"id": row[0], "date": row[1], "description": row[2], "amount": row[3]} for row in rows]
+        return expenses
+    except psycopg2.Error as e:
         logging.error(f"Error loading expenses: {e}")
         return []
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
 
-    for expense in expenses:
-        expense["amount"] = float(expense["amount"])
-    return expenses
-
-def save_expenses(expenses):
+def add_expense(date, description, amount):
     try:
-        with open(EXPENSES_FILE, "w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-            writer.writeheader()
-            writer.writerows(expenses)
-    except OSError as e:
-        logging.error(f"Error saving expenses: {e}")
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO expenses (date, description, amount) VALUES (%s, %s, %s)", (date, description, amount))
+        conn.commit()
+    except psycopg2.Error as e:
+        logging.error(f"Error adding expense: {e}")
+        raise
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
+            
+def delete_expense(expense_id):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM expenses WHERE id = %s", (expense_id,))
+        conn.commit()
+    except psycopg2.Error as e:
+        logging.error(f"Error deleting expense: {e}")
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
