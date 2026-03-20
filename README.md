@@ -8,6 +8,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-316192)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+[![Docker Hub](https://img.shields.io/docker/pulls/iriome2512/expense-tracker?logo=docker)](https://hub.docker.com/r/iriome2512/expense-tracker)
 
 ---
 
@@ -242,6 +243,10 @@ backups/
 git clone https://github.com/Iriome-Santana/expense-tracker-sre.git
 cd expense-tracker-sre
 
+Or pull the pre-built image directly from Docker Hub:
+```bash
+docker pull iriome2512/expense-tracker
+```
 # Copy and configure environment variables
 cp .env.example .env
 nano .env  # Set your values (see Environment Variables section)
@@ -425,6 +430,8 @@ The basic `depends_on` only waits for the container process to start, not for Po
 [✓] Unit tests with mocks — 11/11 passing
 [✓] Automated CSV backups with timestamp
 [✓] Structured logging with run_id
+[✓] Docker image published to Docker Hub (iriome2512/expense-tracker)
+[✓] CI/CD pipeline — build and push on every push to main
 
 [ ] JSON structured logging (replace plaintext format)
 [ ] Prometheus /metrics endpoint
