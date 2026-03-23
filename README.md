@@ -12,13 +12,14 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [What is this?](#-what-is-this)
 - [Architecture](#-architecture)
 - [Project Structure](#-project-structure)
 - [SRE Principles in Practice](#-sre-principles-in-practice)
 - [Tech Stack](#-tech-stack)
+- [Monitoring Dashboards](#-monitoring-dashboards)
 - [Quick Start](#-quick-start)
 - [API Reference](#-api-reference)
 - [Environment Variables](#-environment-variables)
@@ -29,7 +30,7 @@
 
 ---
 
-## 🧠 What is this?
+## What is this?
 
 This project started as a simple expense tracker and evolved into a **learning ground for SRE/DevOps engineering**. Every technical decision — from folder structure to error handling — was made deliberately and is documented here.
 
@@ -39,7 +40,7 @@ This is a self-taught project. If you're also learning SRE/DevOps, feel free to 
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -152,7 +153,7 @@ expense-tracker/
 
 ---
 
-## 🔍 SRE Principles in Practice
+## SRE Principles in Practice
 
 ### 1. Observability
 
@@ -221,7 +222,7 @@ backups/
 ---
 
 
-## 📊 Monitoring Dashboards
+## Monitoring Dashboards
 
 The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 seconds. Grafana visualizes the data in real time.
 
@@ -249,7 +250,7 @@ The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 s
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option 1 — Docker (recommended)
 
@@ -258,7 +259,7 @@ git clone https://github.com/Iriome-Santana/expense-tracker-sre.git
 cd expense-tracker-sre
 
 Or pull the pre-built image directly from Docker Hub:
-```bash
+
 docker pull iriome2512/expense-tracker
 ```
 # Copy and configure environment variables
@@ -306,7 +307,7 @@ python scripts/cli.py
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 | Method | Endpoint | Description | Success | Error |
 |--------|----------|-------------|---------|-------|
@@ -369,7 +370,7 @@ curl -X DELETE http://localhost:8002/expenses/999
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 # Run all tests
@@ -404,7 +405,7 @@ Tests use `MagicMock` for the database session — **no PostgreSQL instance requ
 
 ---
 
-## 📐 Architecture Decision Records
+## Architecture Decision Records
 
 ### Why src-layout instead of flat structure?
 
@@ -448,7 +449,6 @@ The basic `depends_on` only waits for the container process to start, not for Po
 [✓] CI/CD pipeline — build and push on every push to main
 [✓] Prometheus /metrics endpoint
 [✓] Grafana dashboards (requests total · request rate · expenses counter · gauge)
-
 
 [ ] JSON structured logging (replace plaintext format)
 [ ] Alembic migrations (replace init_db())
