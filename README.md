@@ -446,10 +446,11 @@ The basic `depends_on` only waits for the container process to start, not for Po
 [✓] Structured logging with run_id
 [✓] Docker image published to Docker Hub (iriome2512/expense-tracker)
 [✓] CI/CD pipeline — build and push on every push to main
+[✓] Prometheus /metrics endpoint
+[✓] Grafana dashboards (requests total · request rate · expenses counter · gauge)
+
 
 [ ] JSON structured logging (replace plaintext format)
-[ ] Prometheus /metrics endpoint
-[ ] Grafana dashboard (requests · errors · latency)
 [ ] Alembic migrations (replace init_db())
 [ ] Cloud deployment (Render / AWS ECS)
 [ ] Integration tests with real PostgreSQL (testcontainers)
