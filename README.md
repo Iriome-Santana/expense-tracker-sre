@@ -220,6 +220,20 @@ backups/
 
 ---
 
+
+## 📊 Monitoring Dashboards
+
+The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 seconds. Grafana visualizes the data in real time.
+
+![Grafana Dashboards](docs/images/dashboards.png)
+
+**Dashboards included:**
+- **HTTP Requests Total** — accumulated request count per endpoint (`sum by (handler)`)
+- **Request Rate by Endpoint** — real-time requests/sec per endpoint (`sum by (handler) (rate(...))`)
+- **Total Expenses Created** — stat panel showing the running counter
+- **Expenses in Database** — gauge with color thresholds (green → orange at 50 → red at 80)
+
+
 ## 🛠 Tech Stack
 
 | Component | Technology | Why |
