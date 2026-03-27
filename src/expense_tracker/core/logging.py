@@ -1,6 +1,8 @@
 import logging
 import os
+import uuid
 from datetime import datetime, timedelta
+from pythonjsonlogger.json import JsonFormatter
 
 LOG_FILE = os.getenv("LOG_FILE", "app.log")
 LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", 7))
@@ -17,20 +19,31 @@ class RunIDFilter(logging.Filter):
 
 
 def setup_logging(log_file: str = LOG_FILE, run_id: str = None):
+    if run_id is None:
+        run_id = str(uuid.uuid4())[:8]
+
+    formatter = JsonFormatter(
+        fmt="%(asctime)s %(levelname)s %(message)s %(run_id)s",
+        rename_fields={
+            "asctime": "timestamp",
+            "levelname": "level",
+            "run_id": "run_id",
+        },
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+    )
+
     handlers = [logging.StreamHandler()]
 
     if log_file:
         handlers.append(logging.FileHandler(log_file))
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s - %(run_id)s",
-        handlers=handlers,
-        force=True,
-    )
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
 
-    for handler in logging.getLogger().handlers:
+    for handler in handlers:
+        handler.setFormatter(formatter)
         handler.addFilter(RunIDFilter(run_id))
+        root_logger.addHandler(handler)
 
     logging.info("Logger initialized")
     cleanup_logs()
