@@ -449,8 +449,9 @@ The basic `depends_on` only waits for the container process to start, not for Po
 [✓] CI/CD pipeline — build and push on every push to main
 [✓] Prometheus /metrics endpoint
 [✓] Grafana dashboards (requests total · request rate · expenses counter · gauge)
+[✓] JSON structured logging (replace plaintext format)
 
-[ ] JSON structured logging (replace plaintext format)
+
 [ ] Alembic migrations (replace init_db())
 [ ] Cloud deployment (Render / AWS ECS)
 [ ] Integration tests with real PostgreSQL (testcontainers)
