@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from expense_tracker.db.session import get_db
 from expense_tracker.schemas.expense import ExpenseCreate, ExpenseResponse
 from expense_tracker.services.expense_service import ExpenseService
+from expense_tracker.services.backup_service import backup_expenses
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
@@ -54,6 +55,7 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
     ExpenseService().add_expense(db, expense.date, expense.description, expense.amount)
     expenses_created_total.inc()
     expenses_in_db.inc()
+    backup_expenses(db)
     logging.info(f"Expense created - description: {expense.description} amount: {expense.amount}")
     return {"message": "Expense added successfully!"}
 
@@ -63,5 +65,6 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db)):
     ExpenseService().delete_expense(db, expense_id)
     expenses_deleted_total.inc()
     expenses_in_db.dec()
+    backup_expenses(db)
     logging.info(f"Expense deleted - id: {expense_id}")
     return {"message": "Expense deleted successfully!"}
