@@ -7,6 +7,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.129-green)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-316192)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
+![AWS](https://img.shields.io/badge/AWS-EC2%20%2B%20S3-FF9900?logo=amazonaws)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 [![Docker Hub](https://img.shields.io/docker/pulls/iriome2512/expense-tracker?logo=docker)](https://hub.docker.com/r/iriome2512/expense-tracker)
 
@@ -16,6 +17,7 @@
 
 - [What is this?](#-what-is-this)
 - [Architecture](#-architecture)
+- [Cloud Deployment](#-cloud-deployment-aws)
 - [Project Structure](#-project-structure)
 - [SRE Principles in Practice](#-sre-principles-in-practice)
 - [Tech Stack](#-tech-stack)
@@ -87,12 +89,12 @@ This is a self-taught project. If you're also learning SRE/DevOps, feel free to 
 
 Cross-cutting concerns
 ├── Structured logging with unique run_id per session (core/logging.py)
-├── Automated CSV backups on startup       (services/backup_service.py)
-├── HTTP-aware custom exceptions           (core/errors.py)
+├── Automated CSV backups on every write → S3  (services/backup_service.py)
+├── HTTP-aware custom exceptions               (core/errors.py)
 └── Generic error handler — no tracebacks in production (main.py)
 ```
 
-### Docker Compose topology
+### Docker Compose topology (local)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -113,6 +115,113 @@ db healthcheck: pg_isready every 5s
 
 ---
 
+## ☁️ Cloud Deployment (AWS)
+
+The application is deployed on AWS using a **rehosting strategy** (lift-and-shift) as the first milestone of a progressive cloud adoption roadmap.
+
+### Live infrastructure
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    AWS Cloud (eu-west-1)             │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐   │
+│  │         EC2 t3.micro · Elastic IP            │   │
+│  │                                              │   │
+│  │  ┌──────────────────────────────────────┐   │   │
+│  │  │         Docker Compose               │   │   │
+│  │  │  ┌─────────────┐ ┌────────────────┐  │   │   │
+│  │  │  │  api        │ │  db            │  │   │   │
+│  │  │  │  FastAPI    │─│  PostgreSQL 15 │  │   │   │
+│  │  │  │  :8000      │ │  :5432        │  │   │   │
+│  │  │  └──────┬──────┘ └────────────────┘  │   │   │
+│  │  └─────────┼────────────────────────────┘   │   │
+│  └────────────┼─────────────────────────────────┘   │
+│               │ boto3 · s3.put_object()              │
+│               ▼                                     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │   S3 Bucket                                 │   │
+│  │   expense-tracker-backups-iriome-2026        │   │
+│  │   ├── Versioning enabled                    │   │
+│  │   └── Lifecycle policy:                     │   │
+│  │       30d → Standard-IA                     │   │
+│  │       90d → Glacier                         │   │
+│  │       365d → Delete                         │   │
+│  └─────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+### IAM security model
+
+```
+EC2 Instance Profile → ec2-s3-readonly-role
+└── expense-tracker-s3-backup-policy (custom, least privilege)
+    ├── s3:PutObject   → expense-tracker-backups-iriome-2026/*
+    ├── s3:GetObject   → expense-tracker-backups-iriome-2026/*
+    └── s3:ListBucket  → expense-tracker-backups-iriome-2026
+```
+
+No credentials are stored on the instance. The API authenticates to S3 using the IAM Instance Profile — boto3 picks up the temporary credentials automatically.
+
+### Deployment strategy: Rehosting (intentional)
+
+This deployment is a deliberate **rehosting** (lift-and-shift) of the existing Docker Compose stack onto EC2. The application runs identically to the local environment, with one key difference: CSV backups are written directly to S3 instead of the local filesystem.
+
+This was a conscious architectural decision. See [Why EC2 + S3 instead of RDS?](#why-ec2--s3-instead-of-rds) in the ADR section.
+
+The next milestone is **replatforming**: migrating the API to ECS Fargate with RDS PostgreSQL, Terraform-managed infrastructure, and a full CI/CD deployment pipeline.
+
+```
+v1 ✅ Rehosting   — EC2 + Docker Compose + S3 backups (current)
+v2 ⏳ Monitoring  — Prometheus + Grafana on the same EC2
+v3 ⏳ Replatform  — ECS Fargate + RDS + Terraform + full CI/CD
+```
+
+### How the backup pipeline works
+
+```
+POST /expenses/ or DELETE /expenses/{id}
+          │
+          ▼
+ExpenseService writes to PostgreSQL
+          │
+          ▼
+backup_expenses(db) is called
+          │
+          ├── S3_BACKUP_BUCKET defined? ──Yes──▶ boto3 s3.put_object()
+          │                                       s3://bucket/backups/
+          │                                       expenses_backup_TIMESTAMP.csv
+          └── No ──▶ write to local disk
+                     (development mode)
+```
+
+Backups are triggered on every write operation, not on a schedule. If the EC2 instance is replaced or terminated, all backups survive independently in S3.
+
+### How to deploy
+
+The EC2 instance is bootstrapped via a User Data script that runs once on first launch:
+
+1. Installs Docker and Docker Compose
+2. Downloads `docker-compose.prod.yml` from this repository
+3. Creates `/app/.env` with production environment variables
+4. Pulls the latest image from Docker Hub and starts the stack
+
+To update the application after a new push to `main`:
+
+```bash
+# SSH into the instance
+ssh -i ~/.ssh/devops-key.pem ec2-user@<ELASTIC_IP>
+
+# Pull new image and recreate containers
+cd /app
+docker compose pull
+docker compose --env-file /app/.env up -d
+```
+
+The CI/CD pipeline (GitHub Actions) builds and pushes a new Docker image to Docker Hub on every push to `main`. The EC2 pull step above completes the deployment.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -126,7 +235,7 @@ expense-tracker/
 │       │   └── expense.py         # Pydantic I/O schemas
 │       ├── services/
 │       │   ├── expense_service.py # Business logic + @validate_expense
-│       │   └── backup_service.py  # CSV export with timestamp
+│       │   └── backup_service.py  # CSV export → S3 or local disk
 │       ├── api/
 │       │   └── routes/
 │       │       └── expenses.py    # HTTP endpoints (GET/POST/DELETE)
@@ -142,10 +251,11 @@ expense-tracker/
 │   └── test_expenses.py           # 11 unit tests — no real DB needed
 ├── deploy/
 │   ├── Dockerfile                 # python:3.12-slim · pip install .
-│   └── docker-compose.yml         # api + db · healthcheck · volume
+│   ├── docker-compose.yml         # local: api + db + prometheus + grafana
+│   └── docker-compose.prod.yml    # production: api + db only
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                 # CI: checkout → python 3.12 → test
+│       └── ci.yml                 # test → build → push to Docker Hub
 ├── pyproject.toml                 # Dependencies · pytest config · build
 ├── .env.example                   # Environment variable template
 └── .gitignore
@@ -193,22 +303,28 @@ class ExpenseNotFoundError(AppError):
         super().__init__(status_code=404, detail=f"Expense with id {expense_id} not found")
 ```
 
-### 3. Reliability — Automated Backups
+### 3. Reliability — Automated Backups to S3
 
-On every CLI startup, all expenses are exported to a timestamped CSV:
+On every write operation (POST or DELETE), all expenses are exported to a timestamped CSV and uploaded directly to S3:
 
 ```
-backups/
-├── expenses_backup_20260318_143022.csv
-├── expenses_backup_20260317_091500.csv
-└── expenses_backup_20260316_183045.csv
+s3://expense-tracker-backups-iriome-2026/backups/
+├── expenses_backup_20260422_221044.csv
+├── expenses_backup_20260422_222208.csv
+└── expenses_backup_20260422_222235.csv
 ```
+
+The backup destination is controlled by the `S3_BACKUP_BUCKET` environment variable:
+
+- **Defined** → uploads to S3 using the EC2 IAM Instance Profile (no credentials in code)
+- **Not defined** → writes to local disk (development mode, backward compatible)
 
 ### 4. Operability
 
 - All configuration via environment variables — no hardcoded values
 - One-command deployment with Docker Compose
 - `service_healthy` condition on `depends_on` — the API never starts before PostgreSQL is ready
+- `restart: always` in production Compose — containers recover automatically from crashes
 - Generic error handler in production — no tracebacks exposed to clients
 - Interactive API docs at `/docs` — no external tooling needed to explore the API
 
@@ -220,7 +336,6 @@ backups/
 - `pytest-cov` for coverage reporting
 
 ---
-
 
 ## Monitoring Dashboards
 
@@ -234,6 +349,9 @@ The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 s
 - **Total Expenses Created** — stat panel showing the running counter
 - **Expenses in Database** — gauge with color thresholds (green → orange at 50 → red at 80)
 
+> Prometheus and Grafana are included in the local `docker-compose.yml` but excluded from the production stack (`docker-compose.prod.yml`) to stay within the 1GB RAM limit of a t3.micro. Adding observability to the production environment is the next planned milestone.
+
+---
 
 ## 🛠 Tech Stack
 
@@ -245,8 +363,10 @@ The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 s
 | Database | PostgreSQL 15 | Production-grade, concurrent, typed |
 | Testing | pytest + pytest-cov | Fast, fixture-based, coverage reporting |
 | Containerization | Docker Compose | Two-service orchestration (api + db) |
-| CI | GitHub Actions | Runs on every push/PR to main |
+| CI/CD | GitHub Actions | Test → build → push to Docker Hub on every push to main |
 | Package mgmt | pyproject.toml | Modern Python standard (PEP 517/518) |
+| Cloud compute | AWS EC2 t3.micro | Low cost, full Docker support, Elastic IP for stable endpoint |
+| Cloud storage | AWS S3 | Durable backup storage, decoupled from instance lifecycle |
 
 ---
 
@@ -258,10 +378,6 @@ The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 s
 git clone https://github.com/Iriome-Santana/expense-tracker-sre.git
 cd expense-tracker-sre
 
-Or pull the pre-built image directly from Docker Hub:
-
-docker pull iriome2512/expense-tracker
-```
 # Copy and configure environment variables
 cp .env.example .env
 nano .env  # Set your values (see Environment Variables section)
@@ -270,8 +386,14 @@ nano .env  # Set your values (see Environment Variables section)
 docker compose --env-file .env -f deploy/docker-compose.yml up --build
 ```
 
-API available at **http://localhost:8002**  
+API available at **http://localhost:8002**
 Interactive docs at **http://localhost:8002/docs**
+
+Or pull the pre-built image directly from Docker Hub:
+
+```bash
+docker pull iriome2512/expense-tracker
+```
 
 ### Option 2 — Local
 
@@ -364,7 +486,8 @@ curl -X DELETE http://localhost:8002/expenses/999
 | `POSTGRES_DB` | — | Used by the PostgreSQL Docker image |
 | `LOG_FILE` | `app.log` | Log file path |
 | `LOG_RETENTION_DAYS` | `7` | Days before log file is deleted |
-| `BACKUPS_DIR` | `backups` | Directory for CSV backups |
+| `BACKUPS_DIR` | `backups` | Directory for local CSV backups (development) |
+| `S3_BACKUP_BUCKET` | `` | S3 bucket name for backups. If empty, falls back to local disk |
 
 > ⚠️ Never commit your `.env` file. It is listed in `.gitignore` by default.
 
@@ -431,6 +554,32 @@ FastAPI already knows how to handle `HTTPException` — it reads `status_code` a
 
 The basic `depends_on` only waits for the container process to start, not for PostgreSQL to be ready to accept connections. PostgreSQL takes 1–3 seconds to initialize after the container starts. Without a healthcheck, the API starts, tries to connect, fails, and crashes. The `pg_isready` healthcheck polls every 5 seconds and only marks the service healthy when PostgreSQL is genuinely accepting connections.
 
+### Why EC2 + S3 instead of RDS?
+
+RDS PostgreSQL adds ~$15–18/month for a managed service whose main benefits are automated backups, point-in-time recovery, and failover. For this project, the backup requirement is already covered by `backup_service.py` writing timestamped CSVs directly to S3 on every write operation, and the traffic profile doesn't justify multi-AZ failover.
+
+Running PostgreSQL in a container on the same EC2 host eliminates network latency between the API and the database, reduces costs by ~65%, and keeps the deployment identical to the local Docker Compose environment — reducing the surface area for environment-specific bugs.
+
+S3 is kept as a separate service deliberately: it decouples backup storage from the EC2 instance lifecycle. If the instance is terminated or replaced, all backups survive independently.
+
+This decision would be revisited if the project required concurrent writes from multiple instances, point-in-time recovery, or a read replica.
+
+### Why rehosting instead of replatforming from the start?
+
+Rehosting (lift-and-shift) was chosen deliberately as the first cloud milestone for two reasons. First, it validates that the containerised stack runs correctly in AWS with minimal risk — if something breaks, the diff from local is small. Second, it preserves AWS credits: a t3.micro running Docker Compose costs a fraction of an ECS Fargate + RDS setup, extending the available runway for learning without financial pressure.
+
+The architecture is documented as intentional rehosting, not as the final state. Replatforming to ECS + RDS + Terraform is the next planned milestone, once the application behaviour in AWS is fully understood.
+
+### Security tradeoff: credentials in User Data
+
+Database credentials are currently stored in a `.env` file on the EC2 instance, created during bootstrap via User Data. This is acceptable for a single-instance personal project but would be replaced with AWS Secrets Manager in a multi-person or production environment.
+
+The IAM policy for S3 access follows least-privilege: the instance profile only grants `PutObject`, `GetObject`, and `ListBucket` on the specific backup bucket — not `AmazonS3FullAccess` or any account-wide permission.
+
+### Why Prometheus and Grafana are excluded from the production stack?
+
+A t3.micro has 1GB of RAM. Running api + db + prometheus + grafana simultaneously pushes the instance into swap, which degrades performance unpredictably. The production `docker-compose.prod.yml` runs only the two essential services (~600MB combined), leaving headroom for OS processes and traffic spikes. Observability tooling will be added in the next milestone once the instance size or architecture is revisited.
+
 ---
 
 ## 🗺 Roadmap
@@ -450,10 +599,16 @@ The basic `depends_on` only waits for the container process to start, not for Po
 [✓] Prometheus /metrics endpoint
 [✓] Grafana dashboards (requests total · request rate · expenses counter · gauge)
 [✓] JSON structured logging (replace plaintext format)
+[✓] AWS deployment — EC2 t3.micro + Elastic IP (rehosting v1)
+[✓] S3 backup storage — CSV backups decoupled from instance lifecycle
+[✓] IAM least-privilege — custom policy scoped to backup bucket only
+[✓] Per-write backups — S3 upload triggered on every POST and DELETE
 
-
+[ ] Custom domain + SSL/TLS with Let's Encrypt
+[ ] Prometheus + Grafana on production EC2 (observability milestone)
 [ ] Alembic migrations (replace init_db())
-[ ] Cloud deployment (Render / AWS ECS)
+[ ] AWS Secrets Manager for database credentials
+[ ] Replatforming — ECS Fargate + RDS + Terraform + full CI/CD pipeline
 [ ] Integration tests with real PostgreSQL (testcontainers)
 [ ] Rate limiting
 [ ] Authentication (API keys or JWT)
