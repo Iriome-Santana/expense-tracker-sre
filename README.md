@@ -603,6 +603,7 @@ A t3.micro has 1GB of RAM. Running api + db + prometheus + grafana simultaneousl
 [✓] S3 backup storage — CSV backups decoupled from instance lifecycle
 [✓] IAM least-privilege — custom policy scoped to backup bucket only
 [✓] Per-write backups — S3 upload triggered on every POST and DELETE
+[✓] Automated CD — GitHub Actions deploys to EC2 on every push to main
 
 [ ] Custom domain + SSL/TLS with Let's Encrypt
 [ ] Prometheus + Grafana on production EC2 (observability milestone)
