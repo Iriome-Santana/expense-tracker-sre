@@ -155,13 +155,36 @@ The application is deployed on AWS using a **rehosting strategy** (lift-and-shif
 
 ```
 EC2 Instance Profile → ec2-s3-readonly-role
-└── expense-tracker-s3-backup-policy (custom, least privilege)
-    ├── s3:PutObject   → expense-tracker-backups-iriome-2026/*
-    ├── s3:GetObject   → expense-tracker-backups-iriome-2026/*
-    └── s3:ListBucket  → expense-tracker-backups-iriome-2026
+├── expense-tracker-s3-backup-policy (custom, least privilege)
+│   ├── s3:PutObject   → expense-tracker-backups-iriome-2026/*
+│   ├── s3:GetObject   → expense-tracker-backups-iriome-2026/*
+│   └── s3:ListBucket  → expense-tracker-backups-iriome-2026
+└── AmazonSSMManagedInstanceCore (AWS managed)
+    └── allows SSM Agent to receive commands from Systems Manager
+        no inbound ports required
 ```
 
-No credentials are stored on the instance. The API authenticates to S3 using the IAM Instance Profile — boto3 picks up the temporary credentials automatically.
+No credentials are stored on the instance. The API authenticates to S3 using the IAM Instance Profile — boto3 picks up the temporary credentials automatically. Deployment commands are sent via SSM — no SSH port needs to be open.
+
+### CI/CD pipeline
+
+```
+Push to main
+    │
+    ▼
+GitHub Actions: run tests (pytest)
+    │
+    ▼
+GitHub Actions: build image → push to Docker Hub
+    │
+    ▼
+GitHub Actions: AWS CLI → SSM send-command → EC2
+                          docker compose pull
+                          docker compose up -d
+                          docker image prune -f
+```
+
+No SSH involved. GitHub Actions authenticates to AWS via IAM credentials and sends commands to the EC2 instance through SSM Session Manager. Port 22 is not open to the internet.
 
 ### Deployment strategy: Rehosting (intentional)
 
@@ -172,8 +195,8 @@ This was a conscious architectural decision. See [Why EC2 + S3 instead of RDS?](
 The next milestone is **replatforming**: migrating the API to ECS Fargate with RDS PostgreSQL, Terraform-managed infrastructure, and a full CI/CD deployment pipeline.
 
 ```
-v1 ✅ Rehosting   — EC2 + Docker Compose + S3 backups (current)
-v2 ⏳ Monitoring  — Prometheus + Grafana on the same EC2
+v1 ✅ Rehosting   — EC2 + Docker Compose + S3 backups + SSM CD (current)
+v2 ⏳ Monitoring  — CloudWatch Agent + Prometheus + Grafana
 v3 ⏳ Replatform  — ECS Fargate + RDS + Terraform + full CI/CD
 ```
 
@@ -197,7 +220,7 @@ backup_expenses(db) is called
 
 Backups are triggered on every write operation, not on a schedule. If the EC2 instance is replaced or terminated, all backups survive independently in S3.
 
-### How to deploy
+### How to deploy manually
 
 The EC2 instance is bootstrapped via a User Data script that runs once on first launch:
 
@@ -206,19 +229,18 @@ The EC2 instance is bootstrapped via a User Data script that runs once on first 
 3. Creates `/app/.env` with production environment variables
 4. Pulls the latest image from Docker Hub and starts the stack
 
-To update the application after a new push to `main`:
+To update the application manually without going through the CI/CD pipeline:
 
 ```bash
-# SSH into the instance
-ssh -i ~/.ssh/devops-key.pem ec2-user@<ELASTIC_IP>
-
-# Pull new image and recreate containers
-cd /app
-docker compose pull
-docker compose --env-file /app/.env up -d
+# Send command to EC2 via SSM (no SSH required)
+aws ssm send-command \
+  --instance-ids <INSTANCE_ID> \
+  --document-name "AWS-RunShellScript" \
+  --parameters 'commands=["cd /app && docker compose pull && docker compose --env-file /app/.env up -d"]' \
+  --region eu-west-1
 ```
 
-The CI/CD pipeline (GitHub Actions) builds and pushes a new Docker image to Docker Hub on every push to `main`. The EC2 pull step above completes the deployment.
+Every push to `main` triggers the full pipeline automatically — tests, build, and deploy.
 
 ---
 
@@ -255,7 +277,7 @@ expense-tracker/
 │   └── docker-compose.prod.yml    # production: api + db only
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                 # test → build → push to Docker Hub
+│       └── ci.yml                 # test → build → push → deploy via SSM
 ├── pyproject.toml                 # Dependencies · pytest config · build
 ├── .env.example                   # Environment variable template
 └── .gitignore
@@ -327,6 +349,7 @@ The backup destination is controlled by the `S3_BACKUP_BUCKET` environment varia
 - `restart: always` in production Compose — containers recover automatically from crashes
 - Generic error handler in production — no tracebacks exposed to clients
 - Interactive API docs at `/docs` — no external tooling needed to explore the API
+- Deployment via SSM Session Manager — no SSH port open to the internet
 
 ### 5. Testability
 
@@ -363,10 +386,11 @@ The application exposes a `/metrics` endpoint that Prometheus scrapes every 15 s
 | Database | PostgreSQL 15 | Production-grade, concurrent, typed |
 | Testing | pytest + pytest-cov | Fast, fixture-based, coverage reporting |
 | Containerization | Docker Compose | Two-service orchestration (api + db) |
-| CI/CD | GitHub Actions | Test → build → push to Docker Hub on every push to main |
+| CI/CD | GitHub Actions | Test → build → push → deploy on every push to main |
 | Package mgmt | pyproject.toml | Modern Python standard (PEP 517/518) |
 | Cloud compute | AWS EC2 t3.micro | Low cost, full Docker support, Elastic IP for stable endpoint |
 | Cloud storage | AWS S3 | Durable backup storage, decoupled from instance lifecycle |
+| Remote access | AWS SSM Session Manager | Zero open admin ports — deployment without SSH |
 
 ---
 
@@ -570,6 +594,14 @@ Rehosting (lift-and-shift) was chosen deliberately as the first cloud milestone 
 
 The architecture is documented as intentional rehosting, not as the final state. Replatforming to ECS + RDS + Terraform is the next planned milestone, once the application behaviour in AWS is fully understood.
 
+### Why SSM Session Manager instead of SSH for deployment?
+
+The initial CD implementation used `appleboy/ssh-action` to deploy via SSH. This required port 22 to be open to `0.0.0.0/0` because GitHub Actions uses unpredictable IP ranges that cannot be whitelisted statically.
+
+SSM Session Manager eliminates the need for an open SSH port entirely. The EC2 instance connects outbound to the SSM service and maintains a persistent channel. GitHub Actions sends deployment commands through the AWS API using IAM credentials — no inbound port is involved. This reduces the attack surface to zero for the deployment path while keeping the same operational capability.
+
+The tradeoff is added IAM complexity: the EC2 role needs `AmazonSSMManagedInstanceCore` and GitHub Actions needs AWS credentials with SSM permissions. For a security improvement of this magnitude, the complexity is justified.
+
 ### Security tradeoff: credentials in User Data
 
 Database credentials are currently stored in a `.env` file on the EC2 instance, created during bootstrap via User Data. This is acceptable for a single-instance personal project but would be replaced with AWS Secrets Manager in a multi-person or production environment.
@@ -603,9 +635,11 @@ A t3.micro has 1GB of RAM. Running api + db + prometheus + grafana simultaneousl
 [✓] S3 backup storage — CSV backups decoupled from instance lifecycle
 [✓] IAM least-privilege — custom policy scoped to backup bucket only
 [✓] Per-write backups — S3 upload triggered on every POST and DELETE
-[✓] Automated CD — GitHub Actions deploys to EC2 on every push to main
+[✓] Automated CD — GitHub Actions deploys to EC2 via SSM on every push to main
+[✓] Zero open admin ports — SSH replaced by SSM Session Manager
 
 [ ] Custom domain + SSL/TLS with Let's Encrypt
+[ ] CloudWatch Agent — application logs shipped to CloudWatch
 [ ] Prometheus + Grafana on production EC2 (observability milestone)
 [ ] Alembic migrations (replace init_db())
 [ ] AWS Secrets Manager for database credentials
