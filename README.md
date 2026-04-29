@@ -637,6 +637,8 @@ A t3.micro has 1GB of RAM. Running api + db + prometheus + grafana simultaneousl
 [✓] Per-write backups — S3 upload triggered on every POST and DELETE
 [✓] Automated CD — GitHub Actions deploys to EC2 via SSM on every push to main
 [✓] Zero open admin ports — SSH replaced by SSM Session Manager
+[✓] Rate limiting
+
 
 [ ] Custom domain + SSL/TLS with Let's Encrypt
 [ ] CloudWatch Agent — application logs shipped to CloudWatch
@@ -645,7 +647,6 @@ A t3.micro has 1GB of RAM. Running api + db + prometheus + grafana simultaneousl
 [ ] AWS Secrets Manager for database credentials
 [ ] Replatforming — ECS Fargate + RDS + Terraform + full CI/CD pipeline
 [ ] Integration tests with real PostgreSQL (testcontainers)
-[ ] Rate limiting
 [ ] Authentication (API keys or JWT)
 ```
 
