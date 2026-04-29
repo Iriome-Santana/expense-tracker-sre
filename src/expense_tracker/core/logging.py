@@ -6,6 +6,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 LOG_FILE = os.getenv("LOG_FILE", "app.log")
 LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", 7))
+LOG_TO_FILE = os.getenv("LOG_TO_FILE", "false").lower() == "true"
 
 
 class RunIDFilter(logging.Filter):
@@ -34,7 +35,7 @@ def setup_logging(log_file: str = LOG_FILE, run_id: str = None):
 
     handlers = [logging.StreamHandler()]
 
-    if log_file:
+    if LOG_TO_FILE and log_file:
         handlers.append(logging.FileHandler(log_file))
 
     root_logger = logging.getLogger()
