@@ -32,27 +32,31 @@ class ExpenseService:
     """Business logic for expense management."""
 
     @validate_expense
-    def add_expense(self, db: Session, date: str, description: str, amount: float):
+    def add_expense(self, db: Session, date: str, description: str, amount: float, owner: str = "default"):
         expense = Expense(
             date=datetime.strptime(date, "%Y-%m-%d").date(),
             description=description,
             amount=amount,
+            owner=owner
         )
         db.add(expense)
         db.commit()
         db.refresh(expense)
         return expense
 
-    def show_expenses(self, db: Session) -> list[Expense]:
-        return db.query(Expense).all()
+    def show_expenses(self, db: Session, owner: str = "default") -> list[Expense]:
+        return db.query(Expense).filter(Expense.owner == owner).all()
 
-    def delete_expense(self, db: Session, expense_id: int):
-        expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    def delete_expense(self, db: Session, expense_id: int, owner: str = "default"):
+        expense = db.query(Expense).filter(
+            Expense.id == expense_id, 
+            Expense.owner == owner
+            ).first()
         if not expense:
             raise ExpenseNotFoundError(expense_id)
         db.delete(expense)
         db.commit()
 
-    def summary(self, db: Session) -> float:
-        expenses = db.query(Expense).all()
+    def summary(self, db: Session, owner: str = "default") -> float:
+        expenses = db.query(Expense).filter(Expense.owner == owner).all()
         return float(sum(e.amount for e in expenses))

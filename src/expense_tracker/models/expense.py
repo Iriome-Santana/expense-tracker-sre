@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, Text, Numeric
+from sqlalchemy import Column, Integer, Date, Text, Numeric, String
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -13,3 +13,4 @@ class Expense(Base):
     date = Column(Date, nullable=False)
     description = Column(Text, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
+    owner = Column(String, nullable=False)

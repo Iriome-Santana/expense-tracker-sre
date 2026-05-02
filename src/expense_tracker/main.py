@@ -5,13 +5,23 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 
 from expense_tracker.api.routes.expenses import router as expenses_router
 from expense_tracker.core.logging import setup_logging
 from expense_tracker.db.session import init_db, SessionLocal
 from expense_tracker.services.backup_service import backup_expenses
+from expense_tracker.api.routes.admin import router as admin_router
+
+
+limiter = Limiter(key_func=get_remote_address)
 
 RUN_ID = str(uuid.uuid4())[:8]
+
+
 
 
 @asynccontextmanager
@@ -37,6 +47,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.include_router(admin_router)
+
 
 Instrumentator().instrument(app).expose(app)
 
