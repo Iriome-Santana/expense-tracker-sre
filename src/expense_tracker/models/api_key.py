@@ -2,7 +2,7 @@ from sqlalchemy import Column, String, DateTime
 from sqlalchemy.sql import func
 from expense_tracker.models.expense import Base
 
-class APIKey(Base):
+class ApiKey(Base):
     __tablename__ = "api_keys"
 
     key = Column(String, primary_key=True)
