@@ -25,6 +25,8 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET}
+      ADMIN_SECRET: ${ADMIN_SECRET}
+      LOG_TO_FILE: ${LOG_TO_FILE}
     depends_on:
       db:
         condition: service_healthy
