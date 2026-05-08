@@ -578,11 +578,12 @@ A t3.micro has 1GB RAM. Running api + db + prometheus + grafana pushes the insta
 [✓] Rate limiting — SlowAPI, per-IP, 429 on excess
 [✓] API key authentication — per-owner data isolation
 [✓] stdout-only logging in production — no ephemeral file writes
+[✓] Alembic migrations (replace init_db() + manual ALTER TABLE)
+
 
 [ ] Custom domain + SSL/TLS with Let's Encrypt
 [ ] CloudWatch Agent — logs shipped to CloudWatch
 [ ] Prometheus + Grafana on production EC2
-[ ] Alembic migrations (replace init_db() + manual ALTER TABLE)
 [ ] AWS Secrets Manager for database credentials
 [ ] Browser frontend with JWT auth (registration + login flow)
 [ ] Replatforming — ECS Fargate + RDS + Terraform + full CI/CD
