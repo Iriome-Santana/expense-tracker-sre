@@ -20,7 +20,16 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def run_migrations():
     """Ejecuta las migraciones pendientes al arrancar la app."""
-    alembic_cfg = Config("alembic.ini")
+    # Obtener la ruta absoluta del directorio raíz del proyecto
+    # __file__ es session.py, subimos hasta la raíz del paquete instalado
+    package_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)
+    )))
+    alembic_ini = os.path.join(package_dir, "alembic.ini")
+    migrations_dir = os.path.join(package_dir, "migrations")
+
+    alembic_cfg = Config("/app/alembic.ini")
+    alembic_cfg.set_main_option("script_location", "/app/migrations")
     command.upgrade(alembic_cfg, "head")
 
 
