@@ -15,19 +15,19 @@
 
 ## Table of Contents
 
-- [What is this?](#-what-is-this)
-- [Architecture](#-architecture)
-- [Cloud Deployment](#-cloud-deployment-aws)
+- [What is this?](#what-is-this)
+- [Architecture](#architecture)
+- [Cloud Deployment](#cloud-deployment-aws)
 - [Authentication](#-authentication)
 - [Project Structure](#-project-structure)
-- [SRE Principles in Practice](#-sre-principles-in-practice)
+- [SRE Principles in Practice](#sre-principles-in-practice)
 - [Tech Stack](#-tech-stack)
-- [Monitoring Dashboards](#-monitoring-dashboards)
-- [Quick Start](#-quick-start)
-- [API Reference](#-api-reference)
-- [Environment Variables](#-environment-variables)
-- [Running Tests](#-running-tests)
-- [Architecture Decision Records](#-architecture-decision-records)
+- [Monitoring Dashboards](#monitoring-dashboards)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+- [Environment Variables](#environment-variables)
+- [Running Tests](#running-tests)
+- [Architecture Decision Records](#architecture-decision-records)
 - [Roadmap](#-roadmap)
 - [Author](#-author)
 
@@ -118,7 +118,7 @@ db healthcheck: pg_isready every 5s
 
 ---
 
-## ☁️ Cloud Deployment (AWS)
+## Cloud Deployment (AWS)
 
 The application is deployed on AWS using a **rehosting strategy** (lift-and-shift) as the first milestone of a progressive cloud adoption roadmap.
 
@@ -373,6 +373,9 @@ On every write operation (POST or DELETE), expenses are exported to a timestampe
 ## Monitoring Dashboards
 
 The application exposes a `/metrics` endpoint for Prometheus. Grafana dashboards are included in the local `docker-compose.yml` but excluded from production to stay within the 1GB RAM limit of a t3.micro.
+
+# Local dashboards
+![Grafana Dashboard](docs/dashboards.png)
 
 ---
 
