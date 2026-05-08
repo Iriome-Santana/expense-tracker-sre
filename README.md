@@ -375,7 +375,7 @@ On every write operation (POST or DELETE), expenses are exported to a timestampe
 The application exposes a `/metrics` endpoint for Prometheus. Grafana dashboards are included in the local `docker-compose.yml` but excluded from production to stay within the 1GB RAM limit of a t3.micro.
 
 # Local dashboards
-![Grafana Dashboard](docs/dashboards.png)
+![Grafana Dashboard](docs/images/dashboards.png)
 
 ---
 
