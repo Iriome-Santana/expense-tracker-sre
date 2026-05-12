@@ -13,6 +13,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: eu-west-1
+        awslogs-group: /expense-tracker/docker
+        awslogs-stream: db
 
   api:
     image: iriome2512/expense-tracker:latest
@@ -30,6 +36,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: eu-west-1
+        awslogs-group: /expense-tracker/docker
+        awslogs-stream: api
 
 volumes:
   postgres_data:
